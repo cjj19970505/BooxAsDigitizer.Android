@@ -1,11 +1,17 @@
 package com.xeoncjj.booxasdigitizer
 
+import android.util.Log
+
 class HidDescriptor(
-    touchpadPhyWidth: UShort,
-    touchpadPhyHeight: UShort,
+    touchpadPhySizeX: UShort,
+    touchpadPhySizeY: UShort,
+    touchpadLogicalSizeX: UShort,
+    touchpadLogicalSizeY: UShort,
     touchpadUnitExp: Int,
-    penpadPhyWidth: UShort,
-    penpadPhyHeight: UShort,
+    penpadPhySizeX: UShort,
+    penpadPhySizeY: UShort,
+    penpadLogicalSizeX: UShort,
+    penpadLogicalSizeY: UShort,
     penpadUnitExp: Int,
     touchpadId: UByte = 1u,
     maxCountId: UByte = 2u,
@@ -15,6 +21,12 @@ class HidDescriptor(
     mouseId: UByte = 6u,
     penId: UByte = 7u,
 ) {
+    companion object{
+        private const val LOG_TAG = "HidDescriptor"
+    }
+    init {
+        Log.d(LOG_TAG, "afd")
+    }
     private val UShort.highUByte: UByte
         get() {
             return ((this.toInt() shr 8) or 0xff).toUByte()
@@ -30,7 +42,7 @@ class HidDescriptor(
         5 to 0x5u,
         6 to 0x6u,
         7 to 0x7u,
-        -8 to 0x08u,
+        -8 to 0x8u,
         -7 to 0x9u,
         -6 to 0xau,
         -5 to 0xbu,
@@ -66,16 +78,17 @@ class HidDescriptor(
         0x81u, 0x03u,                         //       INPUT (Cnstu,Varu,Abs)      // byte1 (1 byte)
         0x05u, 0x01u,                         //       USAGE_PAGE (Generic Desk..
         0x15u, 0x00u,                         //       LOGICAL_MINIMUM (0)
-        0x26u, 0xffu, 0x0fu,                   //       LOGICAL_MAXIMUM (4095)
+        0x26u, touchpadLogicalSizeX.lowUByte, touchpadLogicalSizeX.highUByte,      //       LOGICAL_MAXIMUM (4095)
         0x75u, 0x10u,                         //       REPORT_SIZE (16)
         0x55u, exponentToCodeMap[touchpadUnitExp]!!,                         //       UNIT_EXPONENT (-2)
         0x65u, 0x13u,                         //       UNIT(Inchu,EngLinear)
         0x09u, 0x30u,                         //       USAGE (X)
         0x35u, 0x00u,                         //       PHYSICAL_MINIMUM (0)
-        0x46u, touchpadPhyWidth.lowUByte, touchpadPhyWidth.highUByte,                   //       PHYSICAL_MAXIMUM (TOUCHPAD_PHY_WIDTH)
+        0x46u, touchpadPhySizeX.lowUByte, touchpadPhySizeX.highUByte,                   //       PHYSICAL_MAXIMUM (TOUCHPAD_PHY_WIDTH)
         0x95u, 0x01u,                         //       REPORT_COUNT (1)
         0x81u, 0x02u,                         //       INPUT (Datau,Varu,Abs)      // x (2 byte)
-        0x46u, touchpadPhyHeight.lowUByte, touchpadPhyHeight.highUByte,                   //       PHYSICAL_MAXIMUM (TOUCHPAD_PHY_HEIGHT)
+        0x26u, touchpadLogicalSizeY.lowUByte, touchpadLogicalSizeY.highUByte,        //       LOGICAL_MAXIMUM (4095)
+        0x46u, touchpadPhySizeY.lowUByte, touchpadPhySizeY.highUByte,                   //       PHYSICAL_MAXIMUM (TOUCHPAD_PHY_HEIGHT)
         0x09u, 0x31u,                         //       USAGE (Y)
         0x81u, 0x02u,                         //       INPUT (Datau,Varu,Abs)      // y (2 byte)
         0xc0u,                               //    END_COLLECTION
@@ -201,11 +214,12 @@ class HidDescriptor(
         0x55u, exponentToCodeMap[penpadUnitExp]!!,                         //     UNIT_EXPONENT (-3)
         0x65u, 0x13u,                         //     UNIT (Inchu,EngLinear)
         0x35u, 0x00u,                         //     PHYSICAL_MINIMUM (0)
-        0x46u, penpadPhyWidth.lowUByte, penpadPhyWidth.highUByte,                   //     PHYSICAL_MAXIMUM (8250)
-        0x26u, 0xf8u, 0x52u,                   //     LOGICAL_MAXIMUM (21240)
+        0x46u, penpadPhySizeX.lowUByte, penpadPhySizeX.highUByte,                   //     PHYSICAL_MAXIMUM (8250)
+        0x26u, penpadLogicalSizeX.lowUByte, penpadLogicalSizeX.highUByte,            //     LOGICAL_MAXIMUM (21240)
         0x81u, 0x02u,                         //     INPUT (Datau,Varu,Abs)
         0x09u, 0x31u,                         //     USAGE (Y)
-        0x46u, penpadPhyHeight.lowUByte, penpadPhyHeight.highUByte,                   //     PHYSICAL_MAXIMUM (6188)
+        0x46u, penpadPhySizeY.lowUByte, penpadPhySizeY.highUByte,                   //     PHYSICAL_MAXIMUM (6188)
+        0x26u, penpadLogicalSizeY.lowUByte, penpadLogicalSizeY.highUByte,           //     LOGICAL_MAXIMUM (21240)
         0x26u, 0x6cu, 0x3eu,                   //     LOGICAL_MAXIMUM (15980)
         0x81u, 0x02u,                         //     INPUT (Datau,Varu,Abs)
         0xb4u,                               //     POP

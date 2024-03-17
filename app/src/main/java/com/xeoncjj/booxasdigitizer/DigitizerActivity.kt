@@ -127,10 +127,8 @@ class DigitizerActivity : AppCompatActivity() {
 
                 if (touchPoint != null) {
                     if (touchPoint.x >= 0 && touchPoint.x <= penpadRect.width() && touchPoint.y >= 0 && touchPoint.y <= penpadRect.height()) {
-                        val x =
-                            (touchPoint.x.toDouble() / penpadRect.width() * 21240).toUInt().toUShort()
-                        val y =
-                            (touchPoint.y.toDouble() / penpadRect.height() * 15980).toUInt().toUShort()
+                        val x = touchPoint.x.toInt().toUShort()
+                        val y = touchPoint.y.toInt().toUShort()
                         val pressure = ((touchPoint.pressure / BOOX_MAX_PRESURE) * HOST_MAX_PRESURE).toUInt().toUShort()
                         val reportByteArray = HidHelper.PenReport(
                             REPORTID_PEN,
@@ -161,10 +159,8 @@ class DigitizerActivity : AppCompatActivity() {
             override fun onRawDrawingTouchPointMoveReceived(p0: TouchPoint?) {
                 if (p0 != null) {
                     if (p0.x >= 0 && p0.x <= penpadRect.width() && p0.y >= 0 && p0.y <= penpadRect.height()) {
-                        val x =
-                            (p0.x.toDouble() / penpadRect.width() * 21240).toUInt().toUShort()
-                        val y =
-                            (p0.y.toDouble() / penpadRect.height() * 15980).toUInt().toUShort()
+                        val x = p0.x.toUInt().toUShort()
+                        val y = p0.y.toUInt().toUShort()
                         val pressure = ((p0.pressure / 4095) * 255).toUInt().toUShort()
                         val reportByteArray = HidHelper.PenReport(
                             REPORTID_PEN,
@@ -198,10 +194,8 @@ class DigitizerActivity : AppCompatActivity() {
             override fun onRawErasingTouchPointMoveReceived(p0: TouchPoint?) {
                 if (p0 != null) {
                     if (p0.x >= 0 && p0.x <= penpadRect.width() && p0.y >= 0 && p0.y <= penpadRect.height()) {
-                        val x =
-                            (p0.x.toDouble() / penpadRect.width() * 21240).toUInt().toUShort()
-                        val y =
-                            (p0.y.toDouble() / penpadRect.height() * 15980).toUInt().toUShort()
+                        val x = p0.x.toUInt().toUShort()
+                        val y = p0.y.toUInt().toUShort()
                         val pressure = ((p0.pressure / 4095) * 255).toUInt().toUShort()
                         val reportByteArray = HidHelper.PenReport(
                             REPORTID_PEN,
@@ -318,12 +312,8 @@ class DigitizerActivity : AppCompatActivity() {
                             // I remembered I encountered a bug on this. But I don't remember what exactly.
                             if(!_drawing){
                                 if (event.x >= 0 && event.x <= penpadRect.width() && event.y >= 0 && event.y <= penpadRect.height()) {
-                                    val x =
-                                        (event.x.toDouble() / penpadRect.width() * 21240).toUInt()
-                                            .toUShort()
-                                    val y =
-                                        (event.y.toDouble() / penpadRect.height() * 15980).toUInt()
-                                            .toUShort()
+                                    val x = event.x.toUInt().toUShort()
+                                    val y = event.y.toUInt().toUShort()
                                     val invert = event.getToolType(0) == MotionEvent.TOOL_TYPE_ERASER
                                     val reportByteArray = HidHelper.PenReport(
                                         REPORTID_PEN,
@@ -405,10 +395,8 @@ class DigitizerActivity : AppCompatActivity() {
 
                         var contactCountAssigned = false
                         for(touchData in it){
-                            val normalizedX = clamp(0f, 1f, (touchData.x) / touchpadRect.width())
-                            val normalizedY = clamp(0f, 1f, (touchData.y) / touchpadRect.height())
-                            val x = (normalizedX * 4095).toInt().toUShort()
-                            val y = (normalizedY * 4095).toInt().toUShort()
+                            val x = clamp(touchData.x, 0f, touchpadRect.width().toFloat()).toUInt().toUShort()
+                            val y = clamp(touchData.y, 0f, touchpadRect.height().toFloat()).toUInt().toUShort()
 
                             // val tipSwitch = touchData.actionMasked != MotionEvent.ACTION_UP
                             val tipSwitch = touchData.actionMasked != MotionEvent.ACTION_UP && touchData.actionMasked != MotionEvent.ACTION_POINTER_UP
@@ -470,9 +458,13 @@ class DigitizerActivity : AppCompatActivity() {
                                     val descriptor = HidDescriptor(
                                         (touchpadWidthInch * 10.0.pow(-touchpadExp)).toInt().toUShort(),
                                         (touchpadHeightInch * 10.0.pow(-touchpadExp)).toInt().toUShort(),
+                                        touchpadRect.width().toUShort(),
+                                        touchpadRect.height().toUShort(),
                                         touchpadExp,
                                         (penpadWidthInch * 10.0.pow(-penpadExp)).toInt().toUShort(),
                                         (penpadHeightInch * 10.0.pow(-penpadExp)).toInt().toUShort(),
+                                        penpadRect.width().toUShort(),
+                                        penpadRect.height().toUShort(),
                                         penpadExp
                                     )
                                     val data = mutableListOf<Byte>()
