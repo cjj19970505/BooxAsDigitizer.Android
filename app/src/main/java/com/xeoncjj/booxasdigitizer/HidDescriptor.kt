@@ -220,7 +220,6 @@ class HidDescriptor(
         0x09u, 0x31u,                         //     USAGE (Y)
         0x46u, penpadPhySizeY.lowUByte, penpadPhySizeY.highUByte,                   //     PHYSICAL_MAXIMUM (6188)
         0x26u, penpadLogicalSizeY.lowUByte, penpadLogicalSizeY.highUByte,           //     LOGICAL_MAXIMUM (21240)
-        0x26u, 0x6cu, 0x3eu,                   //     LOGICAL_MAXIMUM (15980)
         0x81u, 0x02u,                         //     INPUT (Datau,Varu,Abs)
         0xb4u,                               //     POP
         0x05u, 0x0du,                         //     USAGE_PAGE (Digitizers)
