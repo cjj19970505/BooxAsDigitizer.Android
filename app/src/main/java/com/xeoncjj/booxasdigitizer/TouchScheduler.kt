@@ -33,7 +33,7 @@ data class TouchData(
 // when you put your finger stand still and suddently move. A new tipSwitch=1 report will be sent to windows who reconize it as a new pointer down input (instead of moving)
 // And trigger a click event in windows
 // set if(currentTouchState.isNotEmpty()) -> if(false) and you will know
-class TouchScheduler(val maxContactCount: Int) {
+class TouchScheduler(private val maxContactCount: Int) {
     companion object{
         private const val LOG_TAG = "TouchUpdater"
     }
@@ -48,8 +48,8 @@ class TouchScheduler(val maxContactCount: Int) {
     val scheduledTouchDataReceiveChannel: ReceiveChannel<Array<TouchData>> = _outChannel
 
     @OptIn(FlowPreview::class)
-    suspend fun Start() = coroutineScope {
-        val receiveDeferrable = async() {
+    suspend fun start() = coroutineScope {
+        val receiveDeferred = async() {
             _inChannel.receiveAsFlow().collect() {
                 var ignore = true
                 val allTouchData = mutableListOf<TouchData>()
@@ -63,8 +63,7 @@ class TouchScheduler(val maxContactCount: Int) {
                             }
                             ignore = false
                         }else{
-                            if(_touchState.containsKey(touchData.pointerId) || _touchState.count() < maxContactCount)
-                            {
+                            if(_touchState.containsKey(touchData.pointerId) || _touchState.count() < maxContactCount) {
                                 _touchState[touchData.pointerId] = touchData
                                 ignore = false
                             }
@@ -79,7 +78,7 @@ class TouchScheduler(val maxContactCount: Int) {
                 }
             }
         }
-        val scheduleDeferrable = async() {
+        val scheduleDeferred = async() {
             while(true){
                 val currentTouchState = _touchStateMutex.withLock{_touchState.values.toTypedArray()}
                 if(currentTouchState.isNotEmpty()){
@@ -87,8 +86,12 @@ class TouchScheduler(val maxContactCount: Int) {
                         delay(_updateInterval)
                         currentTouchState
                     }
+
+                    // wait for any of _touchDataChannel.receiveAsFlow() or getNextIdleTouchData::await.asFlow() to finish
+                    // https://stackoverflow.com/a/67724851/11879605
                     val getNextScheduleTouchDataFlow = listOf(_touchDataChannel.receiveAsFlow(), getNextIdleTouchData::await.asFlow()).merge()
                     val data = getNextScheduleTouchDataFlow.first()
+
                     if(data.isNotEmpty()){
                         _outChannel.send(data)
                     }
@@ -98,10 +101,7 @@ class TouchScheduler(val maxContactCount: Int) {
                 }
             }
         }
-        awaitAll(receiveDeferrable, scheduleDeferrable)
+        awaitAll(receiveDeferred, scheduleDeferred)
     }
-
-    // https://stackoverflow.com/a/67724851/11879605
-    suspend fun <T> Iterable<Deferred<T>>.awaitAny(): T = map { it::await.asFlow() }.merge().first()
 
 }

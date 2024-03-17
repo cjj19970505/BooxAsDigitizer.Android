@@ -11,11 +11,13 @@ import android.graphics.Rect
 import android.hardware.usb.UsbAccessory
 import android.hardware.usb.UsbManager
 import android.os.Bundle
+import android.util.DisplayMetrics
 import android.util.Log
 import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.View
+import android.widget.ImageView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -37,7 +39,8 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.time.Duration
 import java.time.OffsetDateTime
-import kotlin.math.roundToInt
+import kotlin.math.pow
+import kotlin.math.sqrt
 
 
 class DigitizerActivity : AppCompatActivity() {
@@ -49,17 +52,23 @@ class DigitizerActivity : AppCompatActivity() {
         private const val REPORTID_PEN: UByte = 0x07u
         private const val BOOX_MAX_PRESURE = 4095
         private const val HOST_MAX_PRESURE = 255
+        private const val SCREEN_PHY_WIDTH_INCH = 6.181;
+        private const val SCREEN_PHY_HEIGHT_INCH = 4.606;
     }
     lateinit var touchHelper: TouchHelper
     lateinit var surfaceView: SurfaceView
+    lateinit var touchpadImageView: ImageView
     lateinit var usbManager: UsbManager
     var accessory: UsbAccessory? = null
 
     private var _drawing: Boolean = false
     val usbOutputChannel = Channel<ByteArray>()
 
-    val digitizerRect: Rect = Rect(0,0,0,0)
+    val penpadRect: Rect = Rect(0,0,0,0)
+    val touchpadRect: Rect = Rect(0,0,0,0)
     val touchScheduler = TouchScheduler(2)
+
+    var descriptorInvalid = true
 
     private val usbReceiver = object: BroadcastReceiver(){
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -75,6 +84,24 @@ class DigitizerActivity : AppCompatActivity() {
         }
     }
 
+    fun getDeviceDisplaySizeInch(): Array<Double>{
+        val screenDiagInch = 7.8
+        var displayRect = Rect(0,0,0,0)
+        // usage from:
+        // https://developer.android.com/reference/android/util/DisplayMetrics
+        val displayMetrics: DisplayMetrics = resources.displayMetrics
+
+        val widthPixels = windowManager.currentWindowMetrics.bounds.width()
+        val heightPixels = windowManager.currentWindowMetrics.bounds.height()
+
+        val ratio = widthPixels.toDouble() / heightPixels.toDouble()
+        val heightInch = screenDiagInch / sqrt(1+ratio*ratio)
+        val widthInch = heightInch * ratio
+
+        return arrayOf(widthInch, heightInch)
+    }
+
+    @OptIn(ExperimentalUnsignedTypes::class)
     @SuppressLint("ClickableViewAccessibility", "UnspecifiedRegisterReceiverFlag",
         "UnspecifiedImmutableFlag"
     )
@@ -88,6 +115,9 @@ class DigitizerActivity : AppCompatActivity() {
 
         setContentView(R.layout.activity_digitizer)
         surfaceView = findViewById(R.id.surface_view)
+        touchpadImageView = findViewById(R.id.touchpad_area_view)
+
+        getDeviceDisplaySizeInch()
 
         touchHelper = TouchHelper.create(surfaceView, object: RawInputCallback() {
             override fun onBeginRawDrawing(p0: Boolean, touchPoint: TouchPoint?) {
@@ -96,11 +126,11 @@ class DigitizerActivity : AppCompatActivity() {
                 TouchUtils.disableFingerTouch(applicationContext)
 
                 if (touchPoint != null) {
-                    if (touchPoint.x >= 0 && touchPoint.x <= digitizerRect.width() && touchPoint.y >= 0 && touchPoint.y <= digitizerRect.height()) {
+                    if (touchPoint.x >= 0 && touchPoint.x <= penpadRect.width() && touchPoint.y >= 0 && touchPoint.y <= penpadRect.height()) {
                         val x =
-                            (touchPoint.x.toDouble() / digitizerRect.width() * 21240).toUInt().toUShort()
+                            (touchPoint.x.toDouble() / penpadRect.width() * 21240).toUInt().toUShort()
                         val y =
-                            (touchPoint.y.toDouble() / digitizerRect.height() * 15980).toUInt().toUShort()
+                            (touchPoint.y.toDouble() / penpadRect.height() * 15980).toUInt().toUShort()
                         val pressure = ((touchPoint.pressure / BOOX_MAX_PRESURE) * HOST_MAX_PRESURE).toUInt().toUShort()
                         val reportByteArray = HidHelper.PenReport(
                             REPORTID_PEN,
@@ -130,11 +160,11 @@ class DigitizerActivity : AppCompatActivity() {
 
             override fun onRawDrawingTouchPointMoveReceived(p0: TouchPoint?) {
                 if (p0 != null) {
-                    if (p0.x >= 0 && p0.x <= digitizerRect.width() && p0.y >= 0 && p0.y <= digitizerRect.height()) {
+                    if (p0.x >= 0 && p0.x <= penpadRect.width() && p0.y >= 0 && p0.y <= penpadRect.height()) {
                         val x =
-                            (p0.x.toDouble() / digitizerRect.width() * 21240).toUInt().toUShort()
+                            (p0.x.toDouble() / penpadRect.width() * 21240).toUInt().toUShort()
                         val y =
-                            (p0.y.toDouble() / digitizerRect.height() * 15980).toUInt().toUShort()
+                            (p0.y.toDouble() / penpadRect.height() * 15980).toUInt().toUShort()
                         val pressure = ((p0.pressure / 4095) * 255).toUInt().toUShort()
                         val reportByteArray = HidHelper.PenReport(
                             REPORTID_PEN,
@@ -167,11 +197,11 @@ class DigitizerActivity : AppCompatActivity() {
 
             override fun onRawErasingTouchPointMoveReceived(p0: TouchPoint?) {
                 if (p0 != null) {
-                    if (p0.x >= 0 && p0.x <= digitizerRect.width() && p0.y >= 0 && p0.y <= digitizerRect.height()) {
+                    if (p0.x >= 0 && p0.x <= penpadRect.width() && p0.y >= 0 && p0.y <= penpadRect.height()) {
                         val x =
-                            (p0.x.toDouble() / digitizerRect.width() * 21240).toUInt().toUShort()
+                            (p0.x.toDouble() / penpadRect.width() * 21240).toUInt().toUShort()
                         val y =
-                            (p0.y.toDouble() / digitizerRect.height() * 15980).toUInt().toUShort()
+                            (p0.y.toDouble() / penpadRect.height() * 15980).toUInt().toUShort()
                         val pressure = ((p0.pressure / 4095) * 255).toUInt().toUShort()
                         val reportByteArray = HidHelper.PenReport(
                             REPORTID_PEN,
@@ -198,48 +228,32 @@ class DigitizerActivity : AppCompatActivity() {
 
         })
 
-        surfaceView.addOnLayoutChangeListener(object: View.OnLayoutChangeListener {
-            override fun onLayoutChange(
-                v: View?,
-                left: Int,
-                top: Int,
-                right: Int,
-                bottom: Int,
-                oldLeft: Int,
-                oldTop: Int,
-                oldRight: Int,
-                oldBottom: Int
-            ) {
-                digitizerRect.left = left
-                digitizerRect.top = top
-                digitizerRect.right = right
-                digitizerRect.bottom = bottom
-                surfaceView.clean()
-                val limit = Rect()
-                surfaceView.getLocalVisibleRect(limit)
-                touchHelper.apply {
-                    setLimitRect(limit, listOf(Rect()))
-                    setStrokeWidth(STROKE_WIDTH)
-                    openRawDrawing()
-                    // strokestyle must be set after openrawdrawing was called
-                    setStrokeStyle(TouchHelper.STROKE_STYLE_BRUSH)
-                }
-                touchHelper.setRawInputReaderEnable(true)
+        surfaceView.addOnLayoutChangeListener { v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+            penpadRect.left = left
+            penpadRect.top = top
+            penpadRect.right = right
+            penpadRect.bottom = bottom
+            surfaceView.clean()
+            val limit = Rect()
+            surfaceView.getLocalVisibleRect(limit)
+            touchHelper.apply {
+                setLimitRect(limit, listOf(Rect()))
+                setStrokeWidth(STROKE_WIDTH)
+                openRawDrawing()
+                // strokestyle must be set after openrawdrawing was called
+                setStrokeStyle(TouchHelper.STROKE_STYLE_BRUSH)
             }
-        })
+            touchHelper.setRawInputReaderEnable(true)
+            descriptorInvalid = true
+        }
 
-        surfaceView.setOnTouchListener(object:View.OnTouchListener{
-            var startTouchDateTime:OffsetDateTime = OffsetDateTime.MIN
-            var preTouchDateTime: OffsetDateTime = OffsetDateTime.MIN
-            var noTouch = true
+        touchpadImageView.setOnTouchListener(object:View.OnTouchListener{
             override fun onTouch(v: View?, event: MotionEvent?): Boolean {
                 if(event == null){
-                    return true
+                    return false
                 }
-
                 if(event.getToolType(event.actionIndex) == MotionEvent.TOOL_TYPE_FINGER){
                     lifecycleScope.launch {
-
                         // actionIndex is only used for ACTION_POINTER_DOWN or ACTION_POINTER_UP
                         // https://developer.android.com/reference/android/view/MotionEvent#getActionIndex()
                         val updatedTouchData = mutableListOf<TouchData>()
@@ -269,70 +283,16 @@ class DigitizerActivity : AppCompatActivity() {
                     }
                 }
                 return true
-
-                // Old way
-                // Bypass
-//                if(event.getToolType(event.actionIndex) == MotionEvent.TOOL_TYPE_FINGER){
-//                    val now = OffsetDateTime.now()
-//                    var scanTime: UShort = 0u
-//                    val duration = Duration.between(startTouchDateTime, now)
-//                    val durationBetweenFrame = Duration.between(preTouchDateTime, now)
-//                    if(noTouch && durationBetweenFrame.seconds > 3){
-//                        // reset scan time
-//                        startTouchDateTime = now
-//                    }else{
-//                        scanTime = (duration.toMillis() * 10).toUShort()
-//                    }
-//
-//                    preTouchDateTime = now
-//                    noTouch = event.pointerCount == 1 && event.actionMasked == MotionEvent.ACTION_UP
-//                    // From experiment
-//                    // first finger triggers ACTION_DOWN, the rest fingers trigger ACTION_POINTER_DOWN
-//                    var contactCountAssigned = false
-//                    for(pointerIndex in 0..<event.pointerCount){
-//                        val pointerId = event.getPointerId(pointerIndex)
-//                        if(pointerId > HidHelper.MAX_CONTACT_COUNT - 1)
-//                        {
-//                            continue
-//                        }
-//                        val x = ((event.getX(pointerIndex) / digitizerRect.width()) * HidHelper.MAX_TOUCHPAD_X).roundToInt().toUInt().toUShort()
-//                        val y = ((event.getY(pointerIndex) / digitizerRect.height()) * HidHelper.MAX_TOUCHPAD_Y).roundToInt().toUInt().toUShort()
-//                        var contactCount = 0
-//                        if(!contactCountAssigned)
-//                        {
-//                            contactCount = kotlin.math.min(event.pointerCount, HidHelper.MAX_CONTACT_COUNT)
-//                            contactCountAssigned = true
-//                        }
-//                        val tipSwitch = !(event.actionIndex == pointerIndex && (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_POINTER_UP))
-//                        val touchSize = event.getSize(pointerIndex)
-//                        val confidence = touchSize < 0.16
-//
-//                        val btn1 = event.pressure > 0.48
-//                        if(btn1){
-//                            Log.d(LOG_TAG, "Pressure: ${event.pressure}")
-//                        }
-//
-//                        val report = HidHelper.TouchpadReport(
-//                            REPORTID_TOUCHPAD,
-//                            confidence,
-//                            tipSwitch,
-//                            pointerId.toUByte(),
-//                            x,
-//                            y,
-//                            scanTime,
-//                            contactCount.toUByte(),
-//                            btn1
-//                        )
-//                        Log.d(LOG_TAG, "Contact${pointerId} x: ${x} y: ${y} tipSwitch: ${tipSwitch} contactCount: $contactCount scanTime: $scanTime confidence: $confidence")
-//                        lifecycleScope.launch {
-//                            usbOutputChannel.send(report.getReportBuffer())
-//                        }
-//                    }
-//                }
-//                return true
             }
         })
 
+        touchpadImageView.addOnLayoutChangeListener { v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+            touchpadRect.left = left
+            touchpadRect.top = top
+            touchpadRect.right = right
+            touchpadRect.bottom = bottom
+            descriptorInvalid = true
+        }
         surfaceView.setOnGenericMotionListener(object: View.OnGenericMotionListener{
             override fun onGenericMotion(v: View?, event: MotionEvent?): Boolean {
                 if(event == null){
@@ -357,12 +317,12 @@ class DigitizerActivity : AppCompatActivity() {
                             // and make sure no hover_move before TouchHeler.onEndRawDrawing
                             // I remembered I encountered a bug on this. But I don't remember what exactly.
                             if(!_drawing){
-                                if (event.x >= 0 && event.x <= digitizerRect.width() && event.y >= 0 && event.y <= digitizerRect.height()) {
+                                if (event.x >= 0 && event.x <= penpadRect.width() && event.y >= 0 && event.y <= penpadRect.height()) {
                                     val x =
-                                        (event.x.toDouble() / digitizerRect.width() * 21240).toUInt()
+                                        (event.x.toDouble() / penpadRect.width() * 21240).toUInt()
                                             .toUShort()
                                     val y =
-                                        (event.y.toDouble() / digitizerRect.height() * 15980).toUInt()
+                                        (event.y.toDouble() / penpadRect.height() * 15980).toUInt()
                                             .toUShort()
                                     val invert = event.getToolType(0) == MotionEvent.TOOL_TYPE_ERASER
                                     val reportByteArray = HidHelper.PenReport(
@@ -424,7 +384,7 @@ class DigitizerActivity : AppCompatActivity() {
         }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.CREATED){
-                val touchUpdaterDeferred = async { touchScheduler.Start() }
+                val touchUpdaterDeferred = async { touchScheduler.start() }
                 val touchDeferred = async {
                     var startTouchDateTime:OffsetDateTime = OffsetDateTime.MIN
                     var preTouchDateTime: OffsetDateTime = OffsetDateTime.MIN
@@ -445,8 +405,10 @@ class DigitizerActivity : AppCompatActivity() {
 
                         var contactCountAssigned = false
                         for(touchData in it){
-                            val x = (touchData.x / digitizerRect.width() * HidHelper.MAX_TOUCHPAD_X).roundToInt().toUInt().toUShort()
-                            val y = (touchData.y / digitizerRect.height() * HidHelper.MAX_TOUCHPAD_Y).roundToInt().toUInt().toUShort()
+                            val normalizedX = clamp(0f, 1f, (touchData.x) / touchpadRect.width())
+                            val normalizedY = clamp(0f, 1f, (touchData.y) / touchpadRect.height())
+                            val x = (normalizedX * 4095).toInt().toUShort()
+                            val y = (normalizedY * 4095).toInt().toUShort()
 
                             // val tipSwitch = touchData.actionMasked != MotionEvent.ACTION_UP
                             val tipSwitch = touchData.actionMasked != MotionEvent.ACTION_UP && touchData.actionMasked != MotionEvent.ACTION_POINTER_UP
@@ -474,10 +436,7 @@ class DigitizerActivity : AppCompatActivity() {
                                 contactCount,
                                 btn1
                             )
-
-                            async { usbOutputChannel.send(report.getReportBuffer()) }
-
-
+                            usbOutputChannel.send(report.getReportBuffer())
                         }
                     }
                 }
@@ -498,6 +457,34 @@ class DigitizerActivity : AppCompatActivity() {
                         val outputStream = FileOutputStream(fileDescriptor)
                         val outputDeferred = async {
                             usbOutputChannel.receiveAsFlow().collect() {
+                                if(descriptorInvalid){
+                                    val displaySizeInch = getDeviceDisplaySizeInch()
+                                    val touchpadExp:Int = -2
+                                    val penpadExp:Int = -3
+                                    val displayWidth = windowManager.currentWindowMetrics.bounds.width()
+                                    val displayHeight = windowManager.currentWindowMetrics.bounds.height()
+                                    val penpadWidthInch = (penpadRect.width().toDouble() / displayWidth) * displaySizeInch[0]
+                                    val penpadHeightInch = (penpadRect.height().toDouble() / displayHeight) * displaySizeInch[1]
+                                    val touchpadWidthInch = (touchpadRect.width().toDouble() / displayWidth) * displaySizeInch[0]
+                                    val touchpadHeightInch = (touchpadRect.height().toDouble() / displayHeight) * displaySizeInch[1]
+                                    val descriptor = HidDescriptor(
+                                        (touchpadWidthInch * 10.0.pow(-touchpadExp)).toInt().toUShort(),
+                                        (touchpadHeightInch * 10.0.pow(-touchpadExp)).toInt().toUShort(),
+                                        touchpadExp,
+                                        (penpadWidthInch * 10.0.pow(-penpadExp)).toInt().toUShort(),
+                                        (penpadHeightInch * 10.0.pow(-penpadExp)).toInt().toUShort(),
+                                        penpadExp
+                                    )
+                                    val data = mutableListOf<Byte>()
+                                    data.add(0x80u.toByte())
+                                    data.addAll(descriptor.descriptorData.map {
+                                        it.toByte()
+                                    })
+                                    withContext(Dispatchers.IO){
+                                        outputStream.write(data.toByteArray())
+                                    }
+                                    descriptorInvalid = false
+                                }
                                 withContext(Dispatchers.IO){
                                     outputStream.write(it)
                                 }
@@ -542,6 +529,16 @@ class DigitizerActivity : AppCompatActivity() {
         canvas.drawColor(Color.WHITE)
         holder.unlockCanvasAndPost(canvas)
         return true
+    }
+
+    fun<T:Comparable<T>> clamp(min: T, max: T, v: T): T{
+        return if(v < min){
+            min
+        }else if(v > max){
+            max
+        }else{
+            v
+        }
     }
 
 
