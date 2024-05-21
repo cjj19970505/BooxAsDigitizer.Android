@@ -29,12 +29,12 @@ class HidDescriptor(
     }
     private val UShort.highUByte: UByte
         get() {
-            return ((this.toInt() shr 8) or 0xff).toUByte()
+            return ((this.toInt() shr 8) and 0xff).toUByte()
         }
 
     private val UShort.lowUByte: UByte
         get() {
-            return (this.toInt() or 0xff).toUByte()
+            return (this.toInt() and 0xff).toUByte()
         }
 
     // P38 on hid1_11.pdf

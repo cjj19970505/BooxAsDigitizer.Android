@@ -395,8 +395,8 @@ class DigitizerActivity : AppCompatActivity() {
 
                         var contactCountAssigned = false
                         for(touchData in it){
-                            val x = clamp(touchData.x, 0f, touchpadRect.width().toFloat()).toUInt().toUShort()
-                            val y = clamp(touchData.y, 0f, touchpadRect.height().toFloat()).toUInt().toUShort()
+                            val x = clamp(0f, touchpadRect.width().toFloat(), touchData.x).toUInt().toUShort()
+                            val y = clamp(0f, touchpadRect.height().toFloat(), touchData.y).toUInt().toUShort()
 
                             // val tipSwitch = touchData.actionMasked != MotionEvent.ACTION_UP
                             val tipSwitch = touchData.actionMasked != MotionEvent.ACTION_UP && touchData.actionMasked != MotionEvent.ACTION_POINTER_UP
