@@ -64,16 +64,16 @@ class DigitizerActivity : AppCompatActivity() {
     private var _drawing: Boolean = false
     val usbOutputChannel = Channel<ByteArray>()
 
-    val penpadRect: Rect = Rect(0,0,0,0)
-    val touchpadRect: Rect = Rect(0,0,0,0)
+    val penpadRect: Rect = Rect(0, 0, 0, 0)
+    val touchpadRect: Rect = Rect(0, 0, 0, 0)
     val touchScheduler = TouchScheduler(2)
 
     var descriptorInvalid = true
 
-    private val usbReceiver = object: BroadcastReceiver(){
+    private val usbReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if(intent != null && intent.action == ACTION_USB_PERMISSION){
-                synchronized(this){
+            if (intent != null && intent.action == ACTION_USB_PERMISSION) {
+                synchronized(this) {
                     if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
                         Log.d(LOG_TAG, "permission granted")
                     } else {
