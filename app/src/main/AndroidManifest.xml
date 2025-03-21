@@ -4,6 +4,13 @@
     <uses-feature android:name="android.hardware.usb.accessory"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
 
+    <uses-feature android:name="android.hardware.bluetooth"/>
+    <uses-feature android:name="android.hardware.bluetooth_le"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE"/>
+    <uses-permission android:name="android.permission.BLUETOOTH"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>
+
     <!-- Camera permission seems needed for applying usb permission -->
     <!-- https://stackoverflow.com/a/61785622/11879605 -->
 <!--    <uses-feature-->
@@ -21,6 +28,15 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.BooxAsDigitizer"
         tools:targetApi="31">
+<!--        <activity-->
+<!--            android:name=".BleDigitizerActivity"-->
+<!--            android:exported="true"-->
+<!--            android:screenOrientation="landscape">-->
+<!--            <intent-filter>-->
+<!--                <action android:name="android.intent.action.MAIN" />-->
+<!--                <category android:name="android.intent.category.LAUNCHER" />-->
+<!--            </intent-filter>-->
+<!--        </activity>-->
         <activity
             android:name=".DigitizerActivity"
             android:exported="true"
@@ -32,6 +48,7 @@
             </intent-filter>
             <meta-data android:name="android.hardware.usb.action.USB_ACCESSORY_ATTACHED" android:resource="@xml/usb_accessory_filter"/>
         </activity>
+
     </application>
 
 </manifest>

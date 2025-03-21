@@ -32,6 +32,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -39,6 +40,8 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.time.Duration
 import java.time.OffsetDateTime
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.pow
 import kotlin.math.sqrt
 
@@ -59,16 +62,15 @@ class DigitizerActivity : AppCompatActivity() {
     lateinit var surfaceView: SurfaceView
     lateinit var touchpadImageView: ImageView
     lateinit var usbManager: UsbManager
-    var accessory: UsbAccessory? = null
 
     private var _drawing: Boolean = false
-    val usbOutputChannel = Channel<ByteArray>()
+//    val usbOutputChannel = Channel<ByteArray>()
 
     val penpadRect: Rect = Rect(0, 0, 0, 0)
     val touchpadRect: Rect = Rect(0, 0, 0, 0)
     val touchScheduler = TouchScheduler(2)
 
-    var descriptorInvalid = true
+    var commBackend: BadCommBackend? = null
 
     private val usbReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -100,6 +102,33 @@ class DigitizerActivity : AppCompatActivity() {
 
         return arrayOf(widthInch, heightInch)
     }
+
+    @OptIn(ExperimentalUnsignedTypes::class)
+    suspend fun obtainNewReportDescriptor() = withContext(Dispatchers.Main) {
+        val displaySizeInch = getDeviceDisplaySizeInch()
+        val touchpadExp:Int = -2
+        val penpadExp:Int = -3
+        val displayWidth = windowManager.currentWindowMetrics.bounds.width()
+        val displayHeight = windowManager.currentWindowMetrics.bounds.height()
+        val penpadWidthInch = (penpadRect.width().toDouble() / displayWidth) * displaySizeInch[0]
+        val penpadHeightInch = (penpadRect.height().toDouble() / displayHeight) * displaySizeInch[1]
+        val touchpadWidthInch = (touchpadRect.width().toDouble() / displayWidth) * displaySizeInch[0]
+        val touchpadHeightInch = (touchpadRect.height().toDouble() / displayHeight) * displaySizeInch[1]
+        val descriptor = HidDescriptor(
+            (touchpadWidthInch * 10.0.pow(-touchpadExp)).toInt().toUShort(),
+            (touchpadHeightInch * 10.0.pow(-touchpadExp)).toInt().toUShort(),
+            touchpadRect.width().toUShort(),
+            touchpadRect.height().toUShort(),
+            touchpadExp,
+            (penpadWidthInch * 10.0.pow(-penpadExp)).toInt().toUShort(),
+            (penpadHeightInch * 10.0.pow(-penpadExp)).toInt().toUShort(),
+            penpadRect.width().toUShort(),
+            penpadRect.height().toUShort(),
+            penpadExp
+        )
+        descriptor.descriptorData.toByteArray()
+    }
+
 
     @OptIn(ExperimentalUnsignedTypes::class)
     @SuppressLint("ClickableViewAccessibility", "UnspecifiedRegisterReceiverFlag",
@@ -144,7 +173,7 @@ class DigitizerActivity : AppCompatActivity() {
                             0u
                         ).getReportBuffer()
                         lifecycleScope.launch {
-                            usbOutputChannel.send(reportByteArray)
+                            commBackend?.sendReport(reportByteArray,this@DigitizerActivity::obtainNewReportDescriptor)
                         }
                     }
                 }
@@ -176,7 +205,7 @@ class DigitizerActivity : AppCompatActivity() {
                             0u
                         ).getReportBuffer()
                         lifecycleScope.launch {
-                            usbOutputChannel.send(reportByteArray)
+                            commBackend?.sendReport(reportByteArray, this@DigitizerActivity::obtainNewReportDescriptor)
                         }
                     }
                 }
@@ -211,7 +240,7 @@ class DigitizerActivity : AppCompatActivity() {
                             0u
                         ).getReportBuffer()
                         lifecycleScope.launch {
-                            usbOutputChannel.send(reportByteArray)
+                            commBackend?.sendReport(reportByteArray, this@DigitizerActivity::obtainNewReportDescriptor)
                         }
                     }
                 }
@@ -238,7 +267,9 @@ class DigitizerActivity : AppCompatActivity() {
                 setStrokeStyle(TouchHelper.STROKE_STYLE_BRUSH)
             }
             touchHelper.setRawInputReaderEnable(true)
-            descriptorInvalid = true
+            lifecycleScope.launch {
+                commBackend?.invalidReportDescriptor()
+            }
         }
 
         touchpadImageView.setOnTouchListener(object:View.OnTouchListener{
@@ -285,7 +316,9 @@ class DigitizerActivity : AppCompatActivity() {
             touchpadRect.top = top
             touchpadRect.right = right
             touchpadRect.bottom = bottom
-            descriptorInvalid = true
+            lifecycleScope.launch {
+                commBackend?.invalidReportDescriptor()
+            }
         }
         surfaceView.setOnGenericMotionListener(object: View.OnGenericMotionListener{
             override fun onGenericMotion(v: View?, event: MotionEvent?): Boolean {
@@ -329,7 +362,7 @@ class DigitizerActivity : AppCompatActivity() {
                                         0u
                                     ).getReportBuffer()
                                     lifecycleScope.launch {
-                                        usbOutputChannel.send(reportByteArray)
+                                        commBackend?.sendReport(reportByteArray, this@DigitizerActivity::obtainNewReportDescriptor)
                                     }
                                 }
                             }
@@ -356,22 +389,7 @@ class DigitizerActivity : AppCompatActivity() {
                 holder.removeCallback(this)
             }
         })
-        usbManager = getSystemService(Context.USB_SERVICE) as UsbManager
-        @Suppress("DEPRECATION")
-        accessory = intent.getParcelableExtra<UsbAccessory>(UsbManager.EXTRA_ACCESSORY)
-        if(accessory == null){
-            if(usbManager.accessoryList != null){
-                accessory = usbManager.accessoryList.filter {
-                    it.model == "BooxAsDigitizer"
-                }.let {
-                    if(it.isEmpty()){
-                        null
-                    }else{
-                        it[0]
-                    }
-                }
-            }
-        }
+
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.CREATED){
                 val touchUpdaterDeferred = async { touchScheduler.start() }
@@ -424,7 +442,7 @@ class DigitizerActivity : AppCompatActivity() {
                                 contactCount,
                                 btn1
                             )
-                            usbOutputChannel.send(report.getReportBuffer())
+                            commBackend?.sendReport(report.getReportBuffer(), this@DigitizerActivity::obtainNewReportDescriptor)
                         }
                     }
                 }
@@ -432,6 +450,24 @@ class DigitizerActivity : AppCompatActivity() {
         }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.RESUMED){
+
+                usbManager = getSystemService(Context.USB_SERVICE) as UsbManager
+                @Suppress("DEPRECATION")
+                var accessory = intent.getParcelableExtra<UsbAccessory>(UsbManager.EXTRA_ACCESSORY)
+                if(accessory == null){
+                    if(usbManager.accessoryList != null){
+                        accessory = usbManager.accessoryList.filter {
+                            it.model == "BooxAsDigitizer"
+                        }.let {
+                            if(it.isEmpty()){
+                                null
+                            }else{
+                                it[0]
+                            }
+                        }
+                    }
+                }
+
                 val permissionIntent = PendingIntent.getBroadcast(this@DigitizerActivity, 0, Intent(ACTION_USB_PERMISSION), 0)
                 val filter = IntentFilter(ACTION_USB_PERMISSION).apply {
                     addAction(UsbManager.ACTION_USB_ACCESSORY_DETACHED)
@@ -439,56 +475,19 @@ class DigitizerActivity : AppCompatActivity() {
                 registerReceiver(usbReceiver, filter)
                 if(accessory != null){
                     usbManager.requestPermission(accessory, permissionIntent)
-                    usbManager.openAccessory(accessory).use { parcelFileDescriptor ->
-                        val fileDescriptor = parcelFileDescriptor.fileDescriptor
-                        val inputStream = FileInputStream(fileDescriptor)
-                        val outputStream = FileOutputStream(fileDescriptor)
-                        val outputDeferred = async {
-                            usbOutputChannel.receiveAsFlow().collect() {
-                                if(descriptorInvalid){
-                                    val displaySizeInch = getDeviceDisplaySizeInch()
-                                    val touchpadExp:Int = -2
-                                    val penpadExp:Int = -3
-                                    val displayWidth = windowManager.currentWindowMetrics.bounds.width()
-                                    val displayHeight = windowManager.currentWindowMetrics.bounds.height()
-                                    val penpadWidthInch = (penpadRect.width().toDouble() / displayWidth) * displaySizeInch[0]
-                                    val penpadHeightInch = (penpadRect.height().toDouble() / displayHeight) * displaySizeInch[1]
-                                    val touchpadWidthInch = (touchpadRect.width().toDouble() / displayWidth) * displaySizeInch[0]
-                                    val touchpadHeightInch = (touchpadRect.height().toDouble() / displayHeight) * displaySizeInch[1]
-                                    val descriptor = HidDescriptor(
-                                        (touchpadWidthInch * 10.0.pow(-touchpadExp)).toInt().toUShort(),
-                                        (touchpadHeightInch * 10.0.pow(-touchpadExp)).toInt().toUShort(),
-                                        touchpadRect.width().toUShort(),
-                                        touchpadRect.height().toUShort(),
-                                        touchpadExp,
-                                        (penpadWidthInch * 10.0.pow(-penpadExp)).toInt().toUShort(),
-                                        (penpadHeightInch * 10.0.pow(-penpadExp)).toInt().toUShort(),
-                                        penpadRect.width().toUShort(),
-                                        penpadRect.height().toUShort(),
-                                        penpadExp
-                                    )
-                                    val data = mutableListOf<Byte>()
-                                    data.add(0x80u.toByte())
-                                    data.addAll(descriptor.descriptorData.map {
-                                        it.toByte()
-                                    })
-                                    withContext(Dispatchers.IO){
-                                        outputStream.write(data.toByteArray())
-                                    }
-                                    descriptorInvalid = false
-                                }
-                                withContext(Dispatchers.IO){
-                                    outputStream.write(it)
-                                }
-                            }
-                        }
-                        try {
-                            awaitAll(outputDeferred)
-                        }finally {
-                            inputStream.close()
-                            outputStream.close()
-                        }
+                    val usbFileDescriptor = usbManager.openAccessory(accessory).also {
+                        commBackend = AoaBadCommBackend(it)
                     }
+                    val runCommBackendDeferred = async{
+                        commBackend!!.start()
+                    }
+                    try {
+                        awaitAll(runCommBackendDeferred)
+                    }catch (e: CancellationException){
+                        usbFileDescriptor.close()
+                        ensureActive()
+                    }
+
                 }
             }
         }

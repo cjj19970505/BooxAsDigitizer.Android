@@ -19,14 +19,28 @@
 
     <ImageView
         android:id="@+id/touchpad_area_view"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
+        android:layout_width="521dp"
+        android:layout_height="223dp"
         android:src="@drawable/touchpad"
         app:layout_constraintBottom_toBottomOf="@+id/surface_view"
         app:layout_constraintEnd_toEndOf="@+id/surface_view"
-        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintHorizontal_bias="0.256"
         app:layout_constraintStart_toStartOf="@+id/surface_view"
         app:layout_constraintTop_toTopOf="@+id/surface_view"
-        app:layout_constraintVertical_bias="0.0" />
+        app:layout_constraintVertical_bias="0.831" />
+
+    <Button
+        android:id="@+id/test_button"
+        android:layout_width="536dp"
+        android:layout_height="132dp"
+        android:text="Hello"
+        android:visibility="invisible"
+        android:enabled="false"
+        app:layout_constraintBottom_toBottomOf="@+id/surface_view"
+        app:layout_constraintEnd_toEndOf="@+id/surface_view"
+        app:layout_constraintHorizontal_bias="0.704"
+        app:layout_constraintStart_toStartOf="@+id/surface_view"
+        app:layout_constraintTop_toTopOf="@+id/surface_view"
+        app:layout_constraintVertical_bias="0.077" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
