@@ -13,13 +13,13 @@ class HidDescriptor(
     penpadLogicalSizeX: UShort,
     penpadLogicalSizeY: UShort,
     penpadUnitExp: Int,
-    touchpadId: UByte = 1u,
-    maxCountId: UByte = 2u,
-    piphqaId: UByte = 3u,
-    featureId: UByte = 4u,
-    functionSwitchId: UByte = 5u,
-    mouseId: UByte = 6u,
-    penId: UByte = 7u,
+    val touchpadId: UByte = 1u,
+    val maxCountId: UByte = 2u,
+    val piphqaId: UByte = 3u,
+    val featureId: UByte = 4u,
+    val functionSwitchId: UByte = 5u,
+    val mouseId: UByte = 6u,
+    val penId: UByte = 7u,
 ) {
     companion object{
         private const val LOG_TAG = "HidDescriptor"

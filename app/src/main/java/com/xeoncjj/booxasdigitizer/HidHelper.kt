@@ -31,9 +31,18 @@ class HidHelper {
         val button1: Boolean,
     )
 
+    data class MouseReport(
+        val reportId: UByte,
+        val button1: Boolean,
+        val button2: Boolean,
+        val x: UShort,
+        val y: UShort,
+    )
+
     companion object{
         const val PEN_REPORT_SIZE = 10
         const val TOUCHPAD_REPORT_SIZE = 10
+        const val MOUSE_REPORT_SIZE = 6
         const val MAX_CONTACT_COUNT = 5
         const val MAX_TOUCHPAD_X = 4095
         const val MAX_TOUCHPAD_Y = 4095
@@ -77,5 +86,24 @@ class HidHelper {
                 put(button1.asMaskOffset(0))
             }.array()
         }
+
+        fun MouseReport.getReportBuffer(): ByteArray{
+            return ByteBuffer.allocate(MOUSE_REPORT_SIZE).order(ByteOrder.LITTLE_ENDIAN).apply {
+                put(reportId.toByte())
+                put(if(button1 && button2){
+                    3.toByte()
+                }else if(button1){
+                    1.toByte()
+                }else if(button2){
+                    2.toByte()
+                }else{
+                    0.toByte()
+                })
+                putShort(x.toShort())
+                putShort(y.toShort())
+            }.array()
+        }
+
+
     }
 }

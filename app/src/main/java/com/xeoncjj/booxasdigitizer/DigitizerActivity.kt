@@ -1,15 +1,20 @@
 package com.xeoncjj.booxasdigitizer
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.PendingIntent
+import android.bluetooth.BluetoothManager
+import android.bluetooth.le.BluetoothLeAdvertiser
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Rect
 import android.hardware.usb.UsbAccessory
 import android.hardware.usb.UsbManager
+import android.os.Build
 import android.os.Bundle
 import android.util.DisplayMetrics
 import android.util.Log
@@ -19,6 +24,7 @@ import android.view.SurfaceView
 import android.view.View
 import android.widget.ImageView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -53,6 +59,7 @@ class DigitizerActivity : AppCompatActivity() {
         private const val ACTION_USB_PERMISSION = "com.android.example.USB_PERMISSION"
         private const val REPORTID_TOUCHPAD: UByte = 0x01u
         private const val REPORTID_PEN: UByte = 0x07u
+        private const val REPORTID_MOUSE: UByte = 0x06u
         private const val BOOX_MAX_PRESURE = 4095
         private const val HOST_MAX_PRESURE = 255
         private const val SCREEN_PHY_WIDTH_INCH = 6.181;
@@ -114,7 +121,7 @@ class DigitizerActivity : AppCompatActivity() {
         val penpadHeightInch = (penpadRect.height().toDouble() / displayHeight) * displaySizeInch[1]
         val touchpadWidthInch = (touchpadRect.width().toDouble() / displayWidth) * displaySizeInch[0]
         val touchpadHeightInch = (touchpadRect.height().toDouble() / displayHeight) * displaySizeInch[1]
-        val descriptor = HidDescriptor(
+        HidDescriptor(
             (touchpadWidthInch * 10.0.pow(-touchpadExp)).toInt().toUShort(),
             (touchpadHeightInch * 10.0.pow(-touchpadExp)).toInt().toUShort(),
             touchpadRect.width().toUShort(),
@@ -126,7 +133,6 @@ class DigitizerActivity : AppCompatActivity() {
             penpadRect.height().toUShort(),
             penpadExp
         )
-        descriptor.descriptorData.toByteArray()
     }
 
 
@@ -487,8 +493,27 @@ class DigitizerActivity : AppCompatActivity() {
                         usbFileDescriptor.close()
                         ensureActive()
                     }
-
+                }else{ // No USB, use BLE\
+                    val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        ActivityCompat.checkSelfPermission(this@DigitizerActivity, Manifest.permission.BLUETOOTH_CONNECT)
+                    } else {
+                        PackageManager.PERMISSION_GRANTED
+                    }
+                    if (permission == PackageManager.PERMISSION_GRANTED) {
+                        val bluetoothManager = applicationContext.getSystemService(BluetoothManager::class.java)
+                        commBackend = BleServerCommBackend(applicationContext, bluetoothManager)
+                        val runCommBackendDeferred = async{
+                            commBackend!!.start()
+                        }
+                        try {
+                            awaitAll(runCommBackendDeferred)
+                        }catch (e: CancellationException){
+                            ensureActive()
+                        }
+                    }
                 }
+
+
             }
         }
         lifecycleScope.launch {

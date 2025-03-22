@@ -14,8 +14,7 @@ import kotlin.coroutines.cancellation.CancellationException
 interface BadCommBackend {
     suspend fun start()
     suspend fun invalidReportDescriptor()
-    suspend fun updateReportDescriptor(reportDescriptor: ByteArray)
-    suspend fun sendReport(report: ByteArray, newReportDescriptorFunc : (suspend ()-> ByteArray))
+    suspend fun sendReport(report: ByteArray, newReportDescriptorFunc : (suspend ()-> HidDescriptor))
 }
 
 class AoaBadCommBackend(usbFileDesriptor: ParcelFileDescriptor): BadCommBackend{
@@ -29,15 +28,11 @@ class AoaBadCommBackend(usbFileDesriptor: ParcelFileDescriptor): BadCommBackend{
     override suspend fun start(){
         try {
             outputChannel.receiveAsFlow().collect() {
-                // Use ensureActive to throw cancellation exception since aoaOutputStream.write is not a suspend function, it is not aware of any cancellations.
-                // https://developer.android.com/kotlin/coroutines/coroutines-best-practices#coroutine-cancellable
-                currentCoroutineContext().ensureActive()
                 withContext(Dispatchers.IO) {
                     aoaOutputStream.write(it)
                 }
-                currentCoroutineContext().ensureActive()
             }
-        }catch (e: CancellationException){
+        }catch (_: CancellationException){
             aoaInputStream.close()
             aoaOutputStream.close()
             currentCoroutineContext().ensureActive()
@@ -48,17 +43,18 @@ class AoaBadCommBackend(usbFileDesriptor: ParcelFileDescriptor): BadCommBackend{
         reportDescriptorInvalid = true
     }
 
-    override suspend fun updateReportDescriptor(reportDescriptor: ByteArray){
+    suspend fun updateReportDescriptor(reportDescriptor: ByteArray){
         val data = mutableListOf<Byte>()
         data.add(0x80u.toByte())
         data.addAll(reportDescriptor.toTypedArray())
         outputChannel.send(data.toByteArray())
     }
 
-    override suspend fun sendReport(report: ByteArray, newReportDescriptorFunc : (suspend ()-> ByteArray)){
+    @OptIn(ExperimentalUnsignedTypes::class)
+    override suspend fun sendReport(report: ByteArray, newReportDescriptorFunc : (suspend ()-> HidDescriptor)){
         if(reportDescriptorInvalid){
             reportDescriptorInvalid = false
-            updateReportDescriptor(newReportDescriptorFunc())
+            updateReportDescriptor(newReportDescriptorFunc().descriptorData.toByteArray())
         }
         outputChannel.send(report)
     }
